@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'firebase_options.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'services/notification_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -55,7 +56,22 @@ class _LalBusAppState extends State<LalBusApp> with WidgetsBindingObserver {
             }
             if (snapshot.hasData) {
               NotificationService.initialize();
-              return const HomeScreen();
+              return StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(snapshot.data!.uid)
+                    .snapshots(),
+                builder: (context, userSnap) {
+                  if (userSnap.connectionState == ConnectionState.waiting) {
+                    return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFCC0000))));
+                  }
+                  if (!userSnap.hasData || !userSnap.data!.exists) {
+                    FirebaseAuth.instance.signOut();
+                    return const LoginScreen();
+                  }
+                  return const HomeScreen();
+                },
+              );
             }
             return const LoginScreen();
           },
