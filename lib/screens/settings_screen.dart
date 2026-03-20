@@ -8,6 +8,7 @@ import '../main.dart';
 import '../services/location_service.dart';
 import '../models/bus_data.dart';
 import 'login_screen.dart';
+import 'admin_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,6 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _user = FirebaseAuth.instance.currentUser;
   List<String> _favorites = [];
   bool _loadingFavs = true;
+  Map<String, dynamic> _userRole = {};
   String _displayName = '';
   bool _notifsEnabled = true;
   ThemeMode get _themeMode => themeModeNotifier.value;
@@ -41,6 +43,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _displayName = data?['displayName'] ?? _user?.email?.split('@').first ?? 'User';
           _notifsEnabled = data?['notifsEnabled'] ?? true;
           _loadingFavs = false;
+          _userRole = {'role': data?['role'] ?? 'user'};
         });
       } else {
         setState(() => _loadingFavs = false);
@@ -102,10 +105,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 48),
             _buildSignOutButton(),
             const SizedBox(height: 24),
+            if (_userRole['role'] == 'admin') ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminScreen())),
+                  icon: const Icon(Icons.admin_panel_settings),
+                  label: const Text('ADMIN PANEL', style: TextStyle(fontWeight: FontWeight.bold)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFCC0000),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 40),
             Center(
               child: Text(
-                'Version 1.0.0 · Lal Bus Team © 2026',
+                'Version 1.1.0 · Lal Bus Team © 2026',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
               ),
