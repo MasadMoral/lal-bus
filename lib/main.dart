@@ -12,8 +12,33 @@ final ValueNotifier<ThemeMode> themeModeNotifier = ValueNotifier(ThemeMode.syste
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await Permission.location.request();
+  debugPrint("App starting: Initializing Firebase...");
+  
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+      debugPrint("Firebase initialized successfully.");
+    } else {
+      debugPrint("Firebase already initialized (apps not empty).");
+    }
+  } on FirebaseException catch (e) {
+    if (e.code == 'duplicate-app') {
+      debugPrint("Firebase already initialized (duplicate-app).");
+    } else {
+      debugPrint("Firebase initialization error: $e");
+    }
+  } catch (e) {
+    debugPrint("General initialization error: $e");
+  }
+
+  try {
+    debugPrint("Requesting location permission...");
+    final status = await Permission.location.request();
+    debugPrint("Location permission status: $status");
+  } catch (e) {
+    debugPrint("Permission request error: $e");
+  }
+
   runApp(const LalBusApp());
 }
 

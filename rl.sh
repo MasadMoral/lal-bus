@@ -45,7 +45,7 @@ if [ $? -eq 0 ]; then
   echo "✓ GitHub release created"
   echo ""
   echo "🎉 Done! Lal Bus v$VERSION released."
-  echo "👉 https://github.com/MasadMoral/lal-bus/releases/tag/v$VERSION"
+  echo "👉 https://github.com/MasadMoral/rtx_lulbus/releases/tag/v$VERSION"
 else
   echo "✗ GitHub release failed. APK is at: build/app/outputs/flutter-apk/app-release.apk"
 fi

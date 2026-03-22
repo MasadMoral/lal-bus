@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'map_screen.dart';
 import 'schedule_screen.dart';
@@ -50,7 +51,10 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted && _loading) setState(() { _loading = false; });
     });
-    FirebaseDatabase.instance.ref('buses').onValue.listen(
+    FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: 'https://rtx-lalbus-0916-default-rtdb.asia-southeast1.firebasedatabase.app/',
+    ).ref('buses').onValue.listen(
       (event) {
         if (!mounted) return;
         final data = event.snapshot.value as Map<dynamic, dynamic>?;
@@ -224,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateM
                               ? 'Loading...'
                               : _activeBuses == 0
                                   ? 'No active buses'
-                                  : '$_activeBuses bus${_activeBuses > 1 ? 'es' : ''} active',
+                                  : 'active $_activeBuses bus${_activeBuses > 1 ? 'es' : ''}',
                           style: const TextStyle(color: Colors.white, fontSize: 11),
                         ),
                       ],

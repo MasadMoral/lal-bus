@@ -53,7 +53,7 @@ class _StopsScreenState extends State<StopsScreen> {
                   ],
                 ),
                 child: Text(
-                  stop,
+                  stop.split(' (').first,
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,

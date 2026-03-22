@@ -4,7 +4,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'kinchit', nameEn: 'Kinchit', nameBn: 'কিঞ্চিৎ',
     fbGroup: 'https://www.facebook.com/groups/136030586418416',
-    stops: ['DU Campus', 'Old Ramna Thana', 'Mogbazar', 'Wireless', 'Mouchak', 'Malibag Mor', 'Razarbag Mor', 'Pir Jongi Mazar', 'Kamlapur', 'Arambagh'],
+    stops: ['DU Campus', 'Old Ramna Thana', 'Mogbazar', 'Wireless', 'Mouchak (Malibagh)', 'Malibag Mor', 'Razarbag Mor', 'Pir Jongi Mazar', 'Kamlapur', 'Arambagh'],
     schedule: [
       BusTrip(time: '07:00 AM', busNo: '5919', type: 'up'),
       BusTrip(time: '08:00 AM', busNo: '5919', type: 'up'),
@@ -125,7 +125,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'khonika', nameEn: 'Khonika', nameBn: 'ক্ষণিকা',
     fbGroup: 'https://www.facebook.com/groups/136899656480809/',
-    stops: ['DU Campus', 'Khilkhet', 'Kuril Bishwaroad', 'Kurmitola', 'Kawla', 'Airport', 'Jashimuddin', 'Azompur', 'House Building', 'Abdullahpur', 'Station Road', 'College Gate', 'Gazipur', 'Borobari', 'Boardbazar', 'Signboard', 'Bypass', 'Chowrasta', 'Shib Bari'],
+    stops: ['DU Campus', 'Kuril Bishwaroad', 'Khilkhet', 'Kurmitola', 'Kawla', 'Airport', 'Jashimuddin', 'Azompur', 'House Building', 'Abdullahpur', 'Station Road', 'College Gate', 'Gazipura', 'Borobari', 'Boardbazar', 'Signboard (Gazipur)', 'Bypass', 'Chowrasta', 'Shib Bari'],
     schedule: [
       BusTrip(time: '06:00 AM', busNo: '6213', type: 'up'),
       BusTrip(time: '06:20 AM', busNo: '6262', type: 'up'),
@@ -150,7 +150,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'hemonto', nameEn: 'Hemonto', nameBn: 'হেমন্ত',
     fbGroup: 'https://www.facebook.com/groups/hemontofamily/',
-    stops: ['DU Campus', 'Nabinagar', '20 Mile', 'Prantik', 'Jahangirnagar', 'C & B', 'Radio Colony', 'C R P', 'Pakiza', 'Genda', 'Bank Town', 'Police Town', 'Hemayetpur', 'Alomnagar', 'Aminbazar'],
+    stops: ['DU Campus', 'Nabinagar (Savar)', '20 Mile', 'Prantik', 'Jahangirnagar', 'C & B', 'Radio Colony', 'C R P', 'Pakiza', 'Genda', 'Bank Town', 'Police Town', 'Hemayetpur', 'Alomnagar', 'Aminbazar'],
     schedule: [
       BusTrip(time: '06:10 AM', busNo: '6028', type: 'up'),
       BusTrip(time: '06:50 AM', busNo: '6130', type: 'up'),
@@ -164,7 +164,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'ullash', nameEn: 'Ullash', nameBn: 'উল্লাস',
     fbGroup: 'https://www.facebook.com/groups/ullashdu123/',
-    stops: ['DU Campus', 'Tikatuli Flyover', 'Dholaipar', 'Postogola', 'Jurain', 'Nabinagar', 'Mirhajari Bagh', 'Dayaganj'],
+    stops: ['DU Campus', 'Tikatuli Flyover', 'Dholaipar', 'Postogola', 'Jurain', 'Nabinagar (Jatrabari)', 'Mirhajari Bagh', 'Dayaganj'],
     schedule: [
       BusTrip(time: '07:00 AM', busNo: '', type: 'up'),
       BusTrip(time: '08:00 AM', busNo: '', type: 'up'),
@@ -198,7 +198,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'ishakha', nameEn: 'Isha Kha', nameBn: 'ঈশা খাঁ',
     fbGroup: 'https://www.facebook.com/groups/ishakha/',
-    stops: ['DU Campus', 'Kazla', 'Shonir Akhra', 'Rayerbag', 'Matuail', 'Madrasah Road', 'Signboard', 'Shanarpar', 'Mouchak', '10Tola', 'Chittagong Road', 'Kachpur Bridge', 'Madanpur', 'Langolbondo', 'Mograpara'],
+    stops: ['DU Campus', 'Kazla', 'Shonir Akhra', 'Rayerbag', 'Matuail', 'Madrasah Road', 'Signboard (Narayanganj)', 'Shanarpar', 'Mouchak (Siddhirganj)', '10Tola', 'Chittagong Road', 'Kachpur Bridge', 'Madanpur', 'Langolbondo', 'Mograpara'],
     schedule: [
       BusTrip(time: '06:40 AM', busNo: '', type: 'up', busType: 'Single Decker'),
       BusTrip(time: '06:50 AM', busNo: '', type: 'up', busType: 'Double Decker'),
@@ -253,7 +253,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'idrakpur', nameEn: 'Idrakpur', nameBn: 'ইদ্রাকপুর',
     fbGroup: 'https://www.facebook.com/groups/idrakpur.du/',
-    stops: ['DU Campus', 'Signboard', 'Jalkuri', 'Vuighor', 'Osman Ali Stadium', 'Shibu Market', 'Jela Parishad', 'Chashara', '2nd Gate', 'Mondolpara'],
+    stops: ['DU Campus', 'Signboard (Narayanganj)', 'Jalkuri', 'Vuighor', 'Osman Ali Stadium', 'Shibu Market', 'Jela Parishad', 'Chashara', '2nd Gate', 'Mondolpara'],
     schedule: [
       BusTrip(time: '06:35 AM', busNo: '', type: 'up'),
       BusTrip(time: '03:10 PM', busNo: '', type: 'down'),
@@ -271,7 +271,7 @@ final List<BusRoute> duBusRoutes = [
   BusRoute(
     id: 'ananda', nameEn: 'Ananda', nameBn: 'আনন্দ',
     fbGroup: 'https://www.facebook.com/groups/ananda.du',
-    stops: ['DU Campus', 'Signboard', 'Vuighor', 'Jalkuri', 'Osman Ali Stadium', 'Shibu Market', 'Chashara', 'Jela Parishad', '2nd Gate', 'Mondolpara'],
+    stops: ['DU Campus', 'Signboard (Narayanganj)', 'Vuighor', 'Jalkuri', 'Osman Ali Stadium', 'Shibu Market', 'Chashara', 'Jela Parishad', '2nd Gate', 'Mondolpara'],
     schedule: [
       BusTrip(time: '06:50 AM', busNo: '', type: 'up'),
       BusTrip(time: '07:40 AM', busNo: '', type: 'up'),

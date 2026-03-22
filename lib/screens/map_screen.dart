@@ -4,12 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/bus_data.dart';
 import '../models/bus_route.dart';
 import '../models/stop_coords.dart';
+import '../services/stop_time_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -17,7 +19,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
   StreamSubscription<DatabaseEvent>? _busSub;
   StreamSubscription<Position>? _locationSub;
@@ -31,6 +33,12 @@ class _MapScreenState extends State<MapScreen> {
   bool _autoFollow = false;
   bool _loading = true;
   String? _error;
+
+  // Find My Bus state
+  String? _selectedSearchStop;
+  final TextEditingController _searchController = TextEditingController();
+  List<String> _stopSuggestions = [];
+  String _selectedDirection = DateTime.now().hour < 12 ? 'up' : 'down';
 
   static const _busColors = [
     Color(0xFFCC0000), Color(0xFF2196F3), Color(0xFF4CAF50), Color(0xFFFF9800),
@@ -56,19 +64,23 @@ class _MapScreenState extends State<MapScreen> {
   void dispose() {
     _busSub?.cancel();
     _locationSub?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
   Future<void> _loadFavorites() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    if (mounted) {
-      setState(() => _favorites = List<String>.from(doc.data()?['favorites'] ?? []));
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      if (mounted) {
+        setState(() => _favorites = List<String>.from(doc.data()?['favorites'] ?? []));
+      }
+    } catch (e) {
+      debugPrint("Error loading favorites: $e");
     }
   }
 
-  // Outlier rejection — remove locations far from median
   LatLng _aggregateLocations(List<Map<String, dynamic>> userDataList) {
     if (userDataList.length == 1) {
       return LatLng(
@@ -82,7 +94,6 @@ class _MapScreenState extends State<MapScreen> {
     final medLat = lats[lats.length ~/ 2];
     final medLng = lngs[lngs.length ~/ 2];
 
-    // Filter outliers — keep within 500m of median
     final filtered = userDataList.where((u) {
       final lat = (u['lat'] as num).toDouble();
       final lng = (u['lng'] as num).toDouble();
@@ -106,11 +117,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _listenToBuses() {
-    Future.delayed(const Duration(seconds: 6), () {
-      if (mounted && _loading) setState(() => _loading = false);
-    });
-
-    _busSub = FirebaseDatabase.instance.ref('buses').onValue.listen(
+    _busSub = FirebaseDatabase.instanceFor(
+      app: Firebase.app(),
+      databaseURL: 'https://rtx-lalbus-0916-default-rtdb.asia-southeast1.firebasedatabase.app/',
+    ).ref('buses').onValue.listen(
       (event) {
         if (!mounted) return;
         final data = event.snapshot.value as Map<dynamic, dynamic>?;
@@ -126,12 +136,13 @@ class _MapScreenState extends State<MapScreen> {
             final List<Map<String, dynamic>> validUsers = [];
             int latestTs = 0;
 
-            users.forEach((_, userData) {
+            users.forEach((uid, userData) {
               if (userData is Map) {
                 final lat = (userData['lat'] as num?)?.toDouble();
                 final lng = (userData['lng'] as num?)?.toDouble();
                 final ts = userData['timestamp'] as int? ?? 0;
-                if (lat != null && lng != null && now - ts < 15 * 60 * 1000) {
+                final diff = now - ts;
+                if (lat != null && lng != null && diff < 15 * 60 * 1000) {
                   validUsers.add({'lat': lat, 'lng': lng, 'ts': ts});
                   if (ts > latestTs) latestTs = ts;
                 }
@@ -156,7 +167,7 @@ class _MapScreenState extends State<MapScreen> {
           _error = null;
         });
       },
-      onError: (_) {
+      onError: (e) {
         if (!mounted) return;
         setState(() { _loading = false; _error = 'Failed to load bus data'; });
       },
@@ -171,9 +182,7 @@ class _MapScreenState extends State<MapScreen> {
         if (permission == LocationPermission.denied ||
             permission == LocationPermission.deniedForever) return;
       }
-      final position = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-      );
+      final position = await Geolocator.getCurrentPosition();
       if (!mounted) return;
       final loc = LatLng(position.latitude, position.longitude);
       setState(() => _userLocation = loc);
@@ -181,9 +190,7 @@ class _MapScreenState extends State<MapScreen> {
         _mapController.move(loc, 15);
       }
 
-      _locationSub = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 20),
-      ).listen((pos) {
+      _locationSub = Geolocator.getPositionStream().listen((pos) {
         if (!mounted) return;
         final loc = LatLng(pos.latitude, pos.longitude);
         setState(() => _userLocation = loc);
@@ -213,130 +220,150 @@ class _MapScreenState extends State<MapScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFCC0000),
-        foregroundColor: Colors.white,
-        title: const Text('Live Map', style: TextStyle(fontWeight: FontWeight.bold)),
-        actions: [
-          // Favorites filter
-          IconButton(
-            icon: Icon(_showOnlyFavorites ? Icons.favorite : Icons.favorite_border),
-            tooltip: _showOnlyFavorites ? 'Show all buses' : 'Show favorites only',
-            onPressed: () => setState(() => _showOnlyFavorites = !_showOnlyFavorites),
-          ),
-          // Stop markers toggle
-          IconButton(
-            icon: Icon(_showStops ? Icons.location_on : Icons.location_off),
-            tooltip: _showStops ? 'Hide stops' : 'Show stops',
-            onPressed: () => setState(() => _showStops = !_showStops),
-          ),
-          // Clear selection
-          if (_selectedBusId != null)
-            IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => setState(() => _selectedBusId = null),
-            ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: duCampus,
-              initialZoom: 13,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.masad.lal_bus',
-              ),
-              if (_selectedBusId != null) _buildRoutePolyline(),
-              if (_showStops && _selectedBusId != null) _buildStopMarkers(),
-              MarkerLayer(markers: _buildBusMarkers()),
-              if (_userLocation != null)
-                MarkerLayer(markers: [
-                  Marker(
-                    point: _userLocation!,
-                    width: 24, height: 24,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.blue,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 3),
-                        boxShadow: [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 4)],
-                      ),
-                    ),
-                  ),
-                ]),
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color(0xFFCC0000),
+          foregroundColor: Colors.white,
+          title: const Text('Live Tracking', style: TextStyle(fontWeight: FontWeight.bold)),
+          bottom: const TabBar(
+            indicatorColor: Colors.white,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            tabs: [
+              Tab(icon: Icon(Icons.map), text: 'Live Map'),
+              Tab(icon: Icon(Icons.search), text: 'Find My Bus'),
             ],
           ),
-          if (_loading)
-            const Center(child: Card(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Color(0xFFCC0000))))),
-          if (_error != null)
-            Positioned(
-              top: 8, left: 16, right: 16,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: const Color(0xFFFFEEEE), borderRadius: BorderRadius.circular(12)),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: Color(0xFFCC0000), size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(_error!, style: const TextStyle(color: Color(0xFFCC0000), fontSize: 13))),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, size: 20),
-                        onPressed: () { setState(() { _loading = true; _error = null; }); _busSub?.cancel(); _listenToBuses(); },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+          actions: [
+            IconButton(
+              icon: Icon(_showOnlyFavorites ? Icons.favorite : Icons.favorite_border),
+              tooltip: _showOnlyFavorites ? 'Show all' : 'Favorites only',
+              onPressed: () => setState(() => _showOnlyFavorites = !_showOnlyFavorites),
             ),
-          if (!_loading && _displayedBuses.isNotEmpty)
-            Positioned(
-              bottom: 16, left: 16, right: 16,
-              child: _buildBusLegend(isDark),
+            IconButton(
+              icon: Icon(_showStops ? Icons.location_on : Icons.location_off),
+              tooltip: _showStops ? 'Hide stops' : 'Show stops',
+              onPressed: () => setState(() => _showStops = !_showStops),
             ),
-          if (!_loading && _displayedBuses.isEmpty && _error == null)
-            Positioned(
-              bottom: 16, left: 16, right: 16,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.grey.shade400),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _showOnlyFavorites
-                              ? 'None of your favorite buses are active right now.'
-                              : 'No active buses. Buses appear when riders share their location.',
-                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
+        body: TabBarView(
+          children: [
+            _buildLiveMapTab(isDark),
+            _buildFindMyBusTab(isDark),
+          ],
+        ),
       ),
-      floatingActionButton: Column(
+    );
+  }
+
+  Widget _buildLiveMapTab(bool isDark) {
+    return Stack(
+      children: [
+        FlutterMap(
+          mapController: _mapController,
+          options: MapOptions(
+            initialCenter: duCampus,
+            initialZoom: 13,
+          ),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              userAgentPackageName: 'com.masad.lal_bus',
+            ),
+            if (_selectedBusId != null) _buildRoutePolyline(),
+            if (_showStops && _selectedBusId != null) _buildStopMarkers(),
+            MarkerLayer(markers: _buildBusMarkers()),
+            if (_userLocation != null)
+              MarkerLayer(markers: [
+                Marker(
+                  point: _userLocation!,
+                  width: 24, height: 24,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 3),
+                      boxShadow: [BoxShadow(color: Colors.blue.withValues(alpha: 0.3), blurRadius: 8, spreadRadius: 4)],
+                    ),
+                  ),
+                ),
+              ]),
+          ],
+        ),
+        if (_loading)
+          const Center(child: Card(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(color: Color(0xFFCC0000))))),
+        if (_error != null) _buildErrorBanner(),
+        if (!_loading && _displayedBuses.isNotEmpty)
+          Positioned(bottom: 16, left: 16, right: 16, child: _buildBusLegend(isDark)),
+        if (!_loading && _displayedBuses.isEmpty && _error == null)
+          Positioned(bottom: 16, left: 16, right: 16, child: _buildEmptyState(isDark)),
+        _buildFABs(),
+      ],
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Positioned(
+      top: 8, left: 16, right: 16,
+      child: Material(
+        elevation: 4,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: const Color(0xFFFFEEEE), borderRadius: BorderRadius.circular(12)),
+          child: Row(
+            children: [
+              const Icon(Icons.error_outline, color: Color(0xFFCC0000), size: 20),
+              const SizedBox(width: 8),
+              Expanded(child: Text(_error!, style: const TextStyle(color: Color(0xFFCC0000), fontSize: 13))),
+              IconButton(
+                icon: const Icon(Icons.refresh, size: 20),
+                onPressed: () { setState(() { _loading = true; _error = null; }); _busSub?.cancel(); _listenToBuses(); },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    return Material(
+      elevation: 4,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.info_outline, color: Colors.grey.shade400),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                _showOnlyFavorites
+                    ? 'None of your favorites are active right now.'
+                    : 'No active buses. Buses appear when riders share their location.',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFABs() {
+    return Positioned(
+      right: 16, bottom: 120,
+      child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Auto-follow toggle
           FloatingActionButton.small(
             heroTag: 'follow',
             backgroundColor: _autoFollow ? Colors.blue : Colors.white,
@@ -357,7 +384,6 @@ class _MapScreenState extends State<MapScreen> {
             child: Icon(Icons.my_location, color: _userLocation != null ? Colors.blue : Colors.grey),
           ),
           const SizedBox(height: 8),
-          // DU Campus
           FloatingActionButton.small(
             heroTag: 'campus',
             backgroundColor: const Color(0xFFCC0000),
@@ -366,6 +392,365 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFindMyBusTab(bool isDark) {
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5);
+    final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
+    return Container(
+      color: bgColor,
+      child: Column(
+        children: [
+          _buildSearchHeader(isDark, cardColor),
+          Expanded(
+            child: _selectedSearchStop == null
+                ? _buildStopSearchPrompt()
+                : _buildSearchResults(isDark, cardColor),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchHeader(bool isDark, Color cardColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: cardColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Where are you boarding?', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _searchController,
+            onChanged: (v) {
+              setState(() {
+                _stopSuggestions = stopCoordinates.keys
+                    .where((s) => s.toLowerCase().contains(v.toLowerCase()))
+                    .toList();
+                if (v.isEmpty) _stopSuggestions = [];
+              });
+            },
+            decoration: InputDecoration(
+              hintText: 'Enter stop name...',
+              prefixIcon: const Icon(Icons.location_on, color: Color(0xFFCC0000)),
+              suffixIcon: _searchController.text.isNotEmpty
+                  ? IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() { _searchController.clear(); _selectedSearchStop = null; _stopSuggestions = []; }))
+                  : null,
+              filled: true,
+              fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'up', label: Text('To DU'), icon: Icon(Icons.school_outlined, size: 16)),
+                    ButtonSegment(value: 'down', label: Text('From DU'), icon: Icon(Icons.home_outlined, size: 16)),
+                  ],
+                  selected: {_selectedDirection},
+                  onSelectionChanged: (Set<String> newSelection) {
+                    setState(() => _selectedDirection = newSelection.first);
+                  },
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                    selectedBackgroundColor: const Color(0xFFCC0000),
+                    selectedForegroundColor: Colors.white,
+                    side: BorderSide.none,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_stopSuggestions.isNotEmpty)
+            Container(
+              constraints: const BoxConstraints(maxHeight: 200),
+              margin: const EdgeInsets.only(top: 4),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 10)],
+              ),
+              child: ListView.builder(
+                shrinkWrap: true,
+                padding: EdgeInsets.zero,
+                itemCount: _stopSuggestions.length,
+                itemBuilder: (_, i) {
+                  final stop = _stopSuggestions[i];
+                  return ListTile(
+                    dense: true,
+                    title: Text(stop),
+                    onTap: () {
+                      setState(() {
+                        _selectedSearchStop = stop;
+                        _searchController.text = stop;
+                        _stopSuggestions = [];
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStopSearchPrompt() {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.search, size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text('Search for your boarding stop', style: TextStyle(color: Colors.grey.shade500, fontSize: 15)),
+          const SizedBox(height: 8),
+          Text('Find all buses passing through here', style: TextStyle(color: Colors.grey.shade400, fontSize: 13)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchResults(bool isDark, Color cardColor) {
+    final matchingRoutes = duBusRoutes.where((r) => r.stops.contains(_selectedSearchStop)).toList();
+    if (matchingRoutes.isEmpty) return const Center(child: Text('No buses found for this stop.'));
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: matchingRoutes.length,
+      itemBuilder: (_, i) => _buildBusSearchCard(matchingRoutes[i], isDark, cardColor),
+    );
+  }
+
+  Widget _buildBusSearchCard(BusRoute route, bool isDark, Color cardColor) {
+    final activeData = _activeBuses[route.id];
+    final isLive = activeData != null;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isLive ? const Color(0xFF22C55E).withValues(alpha: 0.5) : (isDark ? Colors.grey.shade800 : Colors.grey.shade200)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(color: _colorForBus(route.id).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Icon(Icons.directions_bus, color: _colorForBus(route.id), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(route.nameEn, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text(route.nameBn, style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                _buildStatusBadge(isLive),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (activeData != null) _buildLiveInfo(activeData, route) else _buildEstimatedInfo(route),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusBadge(bool isLive) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isLive ? const Color(0xFF22C55E).withValues(alpha: 0.1) : Colors.amber.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isLive ? const Color(0xFF22C55E) : Colors.amber),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 6, height: 6, decoration: BoxDecoration(color: isLive ? const Color(0xFF22C55E) : Colors.amber, shape: BoxShape.circle)),
+          const SizedBox(width: 6),
+          Text(isLive ? 'LIVE' : 'ESTIMATED', style: TextStyle(color: isLive ? const Color(0xFF22C55E) : Colors.amber.shade700, fontSize: 10, fontWeight: FontWeight.bold)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveInfo(Map<String, dynamic> data, BusRoute route) {
+    final busLoc = LatLng(data['lat'] as double, data['lng'] as double);
+    final stopLoc = stopCoordinates[_selectedSearchStop]!;
+    final dist = _distanceMeters(busLoc.latitude, busLoc.longitude, stopLoc.latitude, stopLoc.longitude);
+    final etaMins = (dist / 333).round();
+    
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _infoItem(Icons.timer, 'Arriving in', '$etaMins mins'),
+            _infoItem(Icons.people, 'Tracked by', '${data['userCount']} riders'),
+            _infoItem(Icons.radar, 'Distance', '${(dist / 1000).toStringAsFixed(1)} km'),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: const Color(0xFF22C55E).withValues(alpha: 0.05), borderRadius: BorderRadius.circular(8)),
+          child: const Row(
+            children: [
+              Icon(Icons.check_circle, color: Color(0xFF22C55E), size: 14),
+              SizedBox(width: 8),
+              Text('Real-time location verified by riders', style: TextStyle(color: Color(0xFF22C55E), fontSize: 11)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEstimatedInfo(BusRoute route) {
+    final now = DateTime.now();
+    final trips = route.schedule.where((t) => t.type == _selectedDirection).toList();
+    
+    final directionLabel = _selectedDirection == 'up' ? 'To DU' : 'From DU';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (trips.isNotEmpty) ...[
+          Text('Arrivals at $_selectedSearchStop ($directionLabel)', 
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFFCC0000))),
+          const SizedBox(height: 8),
+          _buildTripList(route, trips, now),
+        ],
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.amber, size: 14),
+              SizedBox(width: 8),
+              Expanded(child: Text('No riders sharing live location. Using schedule.', style: TextStyle(color: Color(0xFFB45309), fontSize: 11))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTripList(BusRoute route, List<BusTrip> trips, DateTime now, {bool isDimmed = false}) {
+    return Column(
+      children: trips.map((trip) {
+        bool isNext = false;
+        
+        // Use StopTimeService to get estimated arrival at _selectedSearchStop
+        final stopTimes = StopTimeService.estimateStopTimes(route, trip);
+        final arrivalInfo = stopTimes.firstWhere(
+          (st) => st.stopName == _selectedSearchStop,
+          orElse: () => StopTime(stopName: '', estimatedTime: trip.time),
+        );
+        final arrivalTimeStr = arrivalInfo.estimatedTime;
+
+        if (!isDimmed) {
+          final upcoming = trips.where((t) {
+            final stTimes = StopTimeService.estimateStopTimes(route, t);
+            final ai = stTimes.firstWhere((s) => s.stopName == _selectedSearchStop, orElse: () => StopTime(stopName: '', estimatedTime: t.time));
+            return _parseTripTime(ai.estimatedTime).isAfter(now);
+          }).toList();
+          if (upcoming.isNotEmpty && upcoming.first == trip) {
+            isNext = true;
+          }
+        }
+        
+        return Container(
+          margin: const EdgeInsets.only(bottom: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: isNext ? const Color(0xFFCC0000).withValues(alpha: 0.05) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: isNext ? Border.all(color: const Color(0xFFCC0000).withValues(alpha: 0.2)) : null,
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.access_time, size: 14, color: isNext ? const Color(0xFFCC0000) : Colors.grey.shade400),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(arrivalTimeStr, style: TextStyle(
+                    fontSize: 13, 
+                    fontWeight: isNext ? FontWeight.bold : FontWeight.normal,
+                    color: isDimmed ? Colors.grey.shade400 : (isNext ? const Color(0xFFCC0000) : null),
+                  )),
+                  Text(
+                    '${trip.type == 'up' ? route.stops.last : route.stops.first} (${trip.time}) → ${trip.type == 'up' ? route.stops.first : route.stops.last}',
+                    style: TextStyle(fontSize: 9, color: Colors.grey.shade500),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              if (trip.busNo.isNotEmpty) ...[
+                Icon(Icons.directions_bus, size: 12, color: isDimmed ? Colors.grey.shade300 : Colors.grey.shade400),
+                const SizedBox(width: 4),
+                Text('ID: ${trip.busNo}', style: TextStyle(
+                  fontSize: 12, 
+                  color: isDimmed ? Colors.grey.shade400 : Colors.grey.shade600,
+                  fontFamily: 'monospace',
+                )),
+              ],
+              if (isNext) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(color: const Color(0xFFCC0000), borderRadius: BorderRadius.circular(4)),
+                  child: const Text('NEXT', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+
+  DateTime _parseTripTime(String time) {
+    final parts = time.split(' ');
+    final hm = parts[0].split(':');
+    int hour = int.parse(hm[0]);
+    final min = int.parse(hm[1]);
+    final isPm = parts[1] == 'PM';
+    if (isPm && hour != 12) hour += 12;
+    if (!isPm && hour == 12) hour = 0;
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day, hour, min);
+  }
+
+  Widget _infoItem(IconData icon, String label, String value) {
+    return Column(
+      children: [
+        Icon(icon, size: 16, color: Colors.grey.shade400),
+        const SizedBox(height: 4),
+        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+        Text(value, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+      ],
     );
   }
 

@@ -1,18 +1,24 @@
 {
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "database": {
+    "rules": "database.rules.json"
+  },
   "flutter": {
     "platforms": {
       "android": {
         "default": {
-          "projectId": "lalbus-1",
-          "appId": "1:711415782042:android:11ac9ed46f42d945145d23",
+          "projectId": "rtx-lalbus-0916",
+          "appId": "1:329478503686:android:ac8d6c3a55a575c8faf287",
           "fileOutput": "android/app/google-services.json"
         }
       },
       "dart": {
         "lib/firebase_options.dart": {
-          "projectId": "lalbus-1",
+          "projectId": "rtx-lalbus-0916",
           "configurations": {
-            "android": "1:711415782042:android:11ac9ed46f42d945145d23"
+            "android": "1:329478503686:android:ac8d6c3a55a575c8faf287"
           }
         }
       }
