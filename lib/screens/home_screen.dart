@@ -101,80 +101,82 @@ class _HomeScreenState extends State<HomeScreen>
           _loading = false;
         });
     });
-    _busSub = FirebaseDatabase.instanceFor(
-          app: Firebase.app(),
-          databaseURL: 'https://rtx-lalbus-0916-default-rtdb.asia-southeast1.firebasedatabase.app',
-        )
-        .ref('buses')
-        .onValue
-        .listen(
-          (event) {
-            if (!mounted) return;
-            final data = event.snapshot.value as Map<dynamic, dynamic>?;
-            if (data == null) {
-              setState(() {
-                _recentActivity = [];
-                _activeBuses = 0;
-                _loading = false;
-                _error = null;
-              });
-              return;
-            }
-
-            final now = DateTime.now().millisecondsSinceEpoch;
-            final List<Map<String, dynamic>> activity = [];
-
-            data.forEach((busId, busData) {
-              if (busData is! Map) return;
-              final users = busData['users'] as Map?;
-              if (users == null || users.isEmpty) return;
-
-              int userCount = 0;
-              int latestTs = 0;
-
-              users.forEach((_, userData) {
-                if (userData is Map) {
-                  userCount++;
-                  final ts = userData['timestamp'] as int? ?? 0;
-                  if (ts > latestTs) latestTs = ts;
+    _busSub =
+        FirebaseDatabase.instanceFor(
+              app: Firebase.app(),
+              databaseURL:
+                  'https://rtx-lalbus-0916-default-rtdb.asia-southeast1.firebasedatabase.app',
+            )
+            .ref('buses')
+            .onValue
+            .listen(
+              (event) {
+                if (!mounted) return;
+                final data = event.snapshot.value as Map<dynamic, dynamic>?;
+                if (data == null) {
+                  setState(() {
+                    _recentActivity = [];
+                    _activeBuses = 0;
+                    _loading = false;
+                    _error = null;
+                  });
+                  return;
                 }
-              });
 
-              if (now - latestTs < 15 * 60 * 1000) {
-                final route = duBusRoutes.firstWhere(
-                  (r) => r.id == busId,
-                  orElse: () => duBusRoutes.first,
-                );
-                activity.add({
-                  'busId': busId,
-                  'nameEn': route.nameEn,
-                  'nameBn': route.nameBn,
-                  'userCount': userCount,
-                  'timestamp': latestTs,
+                final now = DateTime.now().millisecondsSinceEpoch;
+                final List<Map<String, dynamic>> activity = [];
+
+                data.forEach((busId, busData) {
+                  if (busData is! Map) return;
+                  final users = busData['users'] as Map?;
+                  if (users == null || users.isEmpty) return;
+
+                  int userCount = 0;
+                  int latestTs = 0;
+
+                  users.forEach((_, userData) {
+                    if (userData is Map) {
+                      userCount++;
+                      final ts = userData['timestamp'] as int? ?? 0;
+                      if (ts > latestTs) latestTs = ts;
+                    }
+                  });
+
+                  if (now - latestTs < 15 * 60 * 1000) {
+                    final route = duBusRoutes.firstWhere(
+                      (r) => r.id == busId,
+                      orElse: () => duBusRoutes.first,
+                    );
+                    activity.add({
+                      'busId': busId,
+                      'nameEn': route.nameEn,
+                      'nameBn': route.nameBn,
+                      'userCount': userCount,
+                      'timestamp': latestTs,
+                    });
+                  }
                 });
-              }
-            });
 
-            activity.sort(
-              (a, b) =>
-                  (b['timestamp'] as int).compareTo(a['timestamp'] as int),
+                activity.sort(
+                  (a, b) =>
+                      (b['timestamp'] as int).compareTo(a['timestamp'] as int),
+                );
+
+                setState(() {
+                  _recentActivity = activity.take(5).toList();
+                  _activeBuses = activity.length;
+                  _loading = false;
+                  _error = null;
+                });
+              },
+              onError: (error) {
+                if (!mounted) return;
+                setState(() {
+                  _loading = false;
+                  _error = 'Could not load bus data';
+                });
+              },
             );
-
-            setState(() {
-              _recentActivity = activity.take(5).toList();
-              _activeBuses = activity.length;
-              _loading = false;
-              _error = null;
-            });
-          },
-          onError: (error) {
-            if (!mounted) return;
-            setState(() {
-              _loading = false;
-              _error = 'Could not load bus data';
-            });
-          },
-        );
   }
 
   String _timeAgo(int timestamp) {
@@ -195,7 +197,7 @@ class _HomeScreenState extends State<HomeScreen>
       routesToDisplay = duBusRoutes.where((r) {
         return r.schedule.any((trip) => trip.busNo == _assignedBusId);
       }).toList();
-      
+
       // If only one route matches, pre-select it
       if (routesToDisplay.length == 1) {
         selectedRoute = routesToDisplay.first;
@@ -206,7 +208,9 @@ class _HomeScreenState extends State<HomeScreen>
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => StatefulBuilder(
         builder: (context, setModalState) => Padding(
           padding: EdgeInsets.only(
@@ -225,7 +229,9 @@ class _HomeScreenState extends State<HomeScreen>
               ),
               const SizedBox(height: 8),
               Text(
-                selectedRoute == null ? 'Select your route' : 'Select your scheduled trip',
+                selectedRoute == null
+                    ? 'Select your route'
+                    : 'Select your scheduled trip',
                 style: TextStyle(color: Colors.grey.shade500),
               ),
               const SizedBox(height: 20),
@@ -240,13 +246,25 @@ class _HomeScreenState extends State<HomeScreen>
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFCC0000).withValues(alpha: 0.1),
+                            color: const Color(
+                              0xFFCC0000,
+                            ).withValues(alpha: 0.1),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.directions_bus, color: Color(0xFFCC0000), size: 18),
+                          child: const Icon(
+                            Icons.directions_bus,
+                            color: Color(0xFFCC0000),
+                            size: 18,
+                          ),
                         ),
-                        title: Text(route.nameEn, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text(route.nameBn, style: const TextStyle(fontSize: 12)),
+                        title: Text(
+                          route.nameEn,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          route.nameBn,
+                          style: const TextStyle(fontSize: 12),
+                        ),
                         onTap: () => setModalState(() => selectedRoute = route),
                       );
                     },
@@ -255,30 +273,56 @@ class _HomeScreenState extends State<HomeScreen>
               else ...[
                 Row(
                   children: [
-                    if (!(_userRole == 'driver' && _assignedBusId != null && routesToDisplay.length == 1))
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back),
-                      onPressed: () => setModalState(() => selectedRoute = null),
+                    if (!(_userRole == 'driver' &&
+                        _assignedBusId != null &&
+                        routesToDisplay.length == 1))
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () =>
+                            setModalState(() => selectedRoute = null),
+                      ),
+                    Text(
+                      selectedRoute!.nameEn,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
-                    Text(selectedRoute!.nameEn, style: const TextStyle(fontWeight: FontWeight.bold)),
                   ],
                 ),
                 const SizedBox(height: 10),
                 SizedBox(
                   height: 300,
                   child: ListView.builder(
-                    itemCount: (selectedRoute!.schedule.where((trip) => _userRole != 'driver' || _assignedBusId == null || trip.busNo == _assignedBusId)).length,
+                    itemCount: (selectedRoute!.schedule.where(
+                      (trip) =>
+                          _userRole != 'driver' ||
+                          _assignedBusId == null ||
+                          trip.busNo == _assignedBusId,
+                    )).length,
                     itemBuilder: (context, index) {
-                      final filteredSchedule = selectedRoute!.schedule.where((trip) => _userRole != 'driver' || _assignedBusId == null || trip.busNo == _assignedBusId).toList();
+                      final filteredSchedule = selectedRoute!.schedule
+                          .where(
+                            (trip) =>
+                                _userRole != 'driver' ||
+                                _assignedBusId == null ||
+                                trip.busNo == _assignedBusId,
+                          )
+                          .toList();
                       final trip = filteredSchedule[index];
                       return ListTile(
-                        title: Text(trip.time, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        subtitle: Text('Bus ID: ${trip.busNo.isEmpty ? "Unknown" : trip.busNo} (${trip.type})'),
+                        title: Text(
+                          trip.time,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Text(
+                          'Bus ID: ${trip.busNo.isEmpty ? "Unknown" : trip.busNo} (${trip.type})',
+                        ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () async {
                           Navigator.pop(context);
-                          final effectiveBusId = trip.busNo.isNotEmpty ? trip.busNo : "${selectedRoute!.id}_${trip.time.replaceAll(' ', '_')}";
-                          final tripLabel = '${selectedRoute!.nameEn} (${trip.time})';
+                          final effectiveBusId = trip.busNo.isNotEmpty
+                              ? trip.busNo
+                              : "${selectedRoute!.id}_${trip.time.replaceAll(' ', '_')}";
+                          final tripLabel =
+                              '${selectedRoute!.nameEn} (${trip.time})';
                           // Capture messenger before async gap (avoids BuildContext-across-async crash)
                           final messenger = ScaffoldMessenger.of(context);
                           // Optimistically update UI right away — don't wait for GPS acquire
@@ -325,13 +369,24 @@ class _HomeScreenState extends State<HomeScreen>
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.person_outline, color: Colors.white),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          if (_userRole == 'driver')
+            IconButton(
+              icon: const Icon(Icons.logout, color: Colors.white),
+              tooltip: 'Logout',
+              onPressed: () async {
+                if (LocationService.isSharing)
+                  await LocationService.stopSharing();
+                await AuthService.signOut();
+              },
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.person_outline, color: Colors.white),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+              ),
             ),
-          ),
         ],
       ),
       body: SafeArea(
@@ -355,9 +410,11 @@ class _HomeScreenState extends State<HomeScreen>
                   _buildErrorBanner(),
                   const SizedBox(height: 16),
                 ],
-                _buildGrid(isDark, cardColor),
-                const SizedBox(height: 16),
-                _buildRecentActivity(isDark, cardColor),
+                if (_userRole != 'driver') ...[
+                  _buildGrid(isDark, cardColor),
+                  const SizedBox(height: 16),
+                  _buildRecentActivity(isDark, cardColor),
+                ],
               ],
             ),
           ),
@@ -468,15 +525,23 @@ class _HomeScreenState extends State<HomeScreen>
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+          border: Border.all(
+            color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+          ),
         ),
         child: InkWell(
-          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MapScreen())),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MapScreen()),
+          ),
           child: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(color: const Color(0xFFCC0000).withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCC0000).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: const Icon(Icons.map, color: Color(0xFFCC0000)),
               ),
               const SizedBox(width: 16),
@@ -484,8 +549,17 @@ class _HomeScreenState extends State<HomeScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Track Live Buses', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text('See where your bus is right now', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    Text(
+                      'Track Live Buses',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      'See where your bus is right now',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
                   ],
                 ),
               ),
@@ -876,5 +950,4 @@ class _HomeScreenState extends State<HomeScreen>
       ],
     );
   }
-
 }
