@@ -88,7 +88,7 @@ class LocationService {
     _subscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 3, // TODO: set to 15 after testing
+        distanceFilter: 0, // TODO: set to 15 after testing (0 = ~1s pulse)
       ),
     ).listen(
       (position) {

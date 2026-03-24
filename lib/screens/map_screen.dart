@@ -1145,6 +1145,13 @@ class _MapScreenState extends State<MapScreen>
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                          Text(
+                            _timeAgo(data['timestamp'] as int),
+                            style: TextStyle(
+                              fontSize: 8,
+                              color: isSelected ? Colors.white60 : Colors.grey.shade500,
+                            ),
+                          ),
                         ],
                       ),
                     ),
