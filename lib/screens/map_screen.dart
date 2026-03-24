@@ -1080,7 +1080,7 @@ class _MapScreenState extends State<MapScreen>
       return Marker(
         point: LatLng(data['lat'] as double, data['lng'] as double),
         width: 160,
-        height: 70,
+        height: 82,
         child: GestureDetector(
           onTap: () {
             setState(
