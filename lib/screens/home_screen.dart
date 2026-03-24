@@ -551,42 +551,44 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildBusCard(bool isDark, Color cardColor) {
     final selectedName = _selectedBusId != null
         ? duBusRoutes
-            .firstWhere(
-              (r) => r.id == _selectedBusId,
-              orElse: () => duBusRoutes.first,
-            )
-            .nameEn
+              .firstWhere(
+                (r) => r.id == _selectedBusId,
+                orElse: () => duBusRoutes.first,
+              )
+              .nameEn
         : null;
 
     return Column(
       children: [
-        // 1. Live Map Card - Permanent
-        _buildUtilityCard(
-          isDark: isDark,
-          cardColor: cardColor,
-          icon: Icons.map,
-          title: 'Track Live Buses',
-          subtitle: 'See where your bus is right now',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MapScreen()),
+        if (_userRole == 'driver') ...[
+          // 1. Live Map Card - Permanent
+          _buildUtilityCard(
+            isDark: isDark,
+            cardColor: cardColor,
+            icon: Icons.map,
+            title: 'Track Live Buses',
+            subtitle: 'See where your bus is right now',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const MapScreen()),
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
+          const SizedBox(height: 12),
 
-        // 2. Schedule Card - Permanent
-        _buildUtilityCard(
-          isDark: isDark,
-          cardColor: cardColor,
-          icon: Icons.calendar_today,
-          title: 'Bus Schedule',
-          subtitle: 'Check departure & arrival times',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ScheduleScreen()),
+          // 2. Schedule Card - Permanent
+          _buildUtilityCard(
+            isDark: isDark,
+            cardColor: cardColor,
+            icon: Icons.calendar_today,
+            title: 'Bus Schedule',
+            subtitle: 'Check departure & arrival times',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ScheduleScreen()),
+            ),
           ),
-        ),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+        ],
 
         // 3. Sharing Card (I'm on a bus)
         AnimatedContainer(
@@ -616,8 +618,8 @@ class _HomeScreenState extends State<HomeScreen>
                         color: _isOnBus
                             ? const Color(0xFFA32D2D)
                             : (isDark
-                                ? Colors.grey.shade300
-                                : Colors.grey.shade600),
+                                  ? Colors.grey.shade300
+                                  : Colors.grey.shade600),
                         fontSize: 12,
                       ),
                     ),
