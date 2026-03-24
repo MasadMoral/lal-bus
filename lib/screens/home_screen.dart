@@ -278,16 +278,23 @@ class _HomeScreenState extends State<HomeScreen>
                         onTap: () async {
                           Navigator.pop(context);
                           final effectiveBusId = trip.busNo.isNotEmpty ? trip.busNo : "${selectedRoute!.id}_${trip.time.replaceAll(' ', '_')}";
+                          final tripLabel = '${selectedRoute!.nameEn} (${trip.time})';
+                          // Capture messenger before async gap (avoids BuildContext-across-async crash)
+                          final messenger = ScaffoldMessenger.of(context);
+                          // Optimistically update UI right away — don't wait for GPS acquire
+                          if (mounted) {
+                            setState(() {
+                              _isOnBus = true;
+                              _selectedBusId = effectiveBusId;
+                            });
+                          }
                           await LocationService.startSharing(
                             busId: effectiveBusId,
                             tripTime: "${selectedRoute!.nameEn} ${trip.time}",
                           );
-                          setState(() => _isOnBus = true);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text('Now tracking: ${selectedRoute!.nameEn} (${trip.time})')),
-                            );
-                          }
+                          messenger.showSnackBar(
+                            SnackBar(content: Text('Now tracking: $tripLabel')),
+                          );
                         },
                       );
                     },
