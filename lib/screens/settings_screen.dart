@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 40),
             Center(
               child: Text(
-                'Version 1.5.0-beta · Lal Bus Team © 2026',
+                'Version 1.6.0-beta · Lal Bus Team © 2026',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
               ),
