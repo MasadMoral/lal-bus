@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'map_screen.dart';
@@ -360,9 +361,41 @@ class _HomeScreenState extends State<HomeScreen>
     final cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
     final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF5F5F5);
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldExit = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Exit App?'),
+            content: const Text('Are you sure you want to close the app?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('CANCEL'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFCC0000),
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('EXIT'),
+              ),
+            ],
+          ),
+        );
+        if (shouldExit ?? false) {
+          if (context.mounted) {
+            // This is the standard way to exit a Flutter app on Android
+            SystemNavigator.pop();
+          }
+        }
+      },
+      child: Scaffold(
+        backgroundColor: bgColor,
+        appBar: AppBar(
         backgroundColor: const Color(0xFFCC0000),
         title: const Text(
           'Lal Bus',
@@ -373,11 +406,7 @@ class _HomeScreenState extends State<HomeScreen>
             IconButton(
               icon: const Icon(Icons.logout, color: Colors.white),
               tooltip: 'Logout',
-              onPressed: () async {
-                if (LocationService.isSharing)
-                  await LocationService.stopSharing();
-                await AuthService.signOut();
-              },
+              onPressed: () => _showLogoutDialog(context),
             )
           else
             IconButton(
@@ -420,8 +449,9 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildHeader(bool isDark) {
     return Container(
@@ -948,6 +978,36 @@ class _HomeScreenState extends State<HomeScreen>
           style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
         ),
       ],
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout?'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              if (LocationService.isSharing) {
+                await LocationService.stopSharing();
+              }
+              await AuthService.signOut();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFCC0000),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('LOGOUT'),
+          ),
+        ],
+      ),
     );
   }
 }
