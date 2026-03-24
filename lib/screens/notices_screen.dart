@@ -6,7 +6,8 @@ import '../services/auth_service.dart';
 import '../models/bus_data.dart';
 
 class NoticesScreen extends StatefulWidget {
-  const NoticesScreen({super.key});
+  final String? initialExpandedBusId;
+  const NoticesScreen({super.key, this.initialExpandedBusId});
   @override
   State<NoticesScreen> createState() => _NoticesScreenState();
 }
@@ -23,7 +24,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
   }
 
   Future<void> _loadUserData() async {
-    final role = await AuthService.getUserRole();
+    final role = await AuthService.getUserDoc();
     final uid = FirebaseAuth.instance.currentUser?.uid;
     List<String> favs = [];
     if (uid != null) {
@@ -81,6 +82,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
                         busNameBn: route.nameBn,
                         isAdmin: _isAdmin || _adminBusId == busId,
                         adminBusId: _adminBusId,
+                        initialExpanded: widget.initialExpandedBusId == busId,
                       );
                     }),
                   ],
@@ -93,6 +95,7 @@ class _NoticesScreenState extends State<NoticesScreen> {
                             busNameBn: r.nameBn,
                             isAdmin: _isAdmin || _adminBusId == r.id,
                             adminBusId: _adminBusId,
+                            initialExpanded: widget.initialExpandedBusId == r.id,
                           )),
                 ],
               ),
@@ -186,10 +189,11 @@ class _BusNoticesTile extends StatefulWidget {
   final String busNameBn;
   final bool isAdmin;
   final String? adminBusId;
+  final bool initialExpanded;
 
   const _BusNoticesTile({
     required this.busId, required this.busName, required this.busNameBn,
-    required this.isAdmin, this.adminBusId,
+    required this.isAdmin, this.adminBusId, this.initialExpanded = false,
   });
 
   @override
@@ -198,6 +202,12 @@ class _BusNoticesTile extends StatefulWidget {
 
 class _BusNoticesTileState extends State<_BusNoticesTile> {
   bool _expanded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _expanded = widget.initialExpanded;
+  }
 
   @override
   Widget build(BuildContext context) {

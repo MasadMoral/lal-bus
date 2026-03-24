@@ -1,12 +1,13 @@
-const functions = require('firebase-functions');
-const admin = require('firebase-admin');
-admin.initializeApp();
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { initializeApp } = require('firebase-admin/app');
+const { getMessaging } = require('firebase-admin/messaging');
+initializeApp();
 
 // Notify all users when general notice is posted
-exports.onGeneralNotice = functions.firestore
-  .document('notices/general/posts/{postId}')
-  .onCreate(async (snap) => {
-    const data = snap.data();
+exports.onGeneralNotice = onDocumentCreated(
+  'notices/general/posts/{postId}',
+  async (event) => {
+    const data = event.data.data();
     const message = {
       notification: {
         title: `📢 ${data.title}`,
@@ -15,19 +16,20 @@ exports.onGeneralNotice = functions.firestore
       topic: 'general_notices',
     };
     try {
-      await admin.messaging().send(message);
+      await getMessaging().send(message);
       console.log('General notice sent:', data.title);
     } catch (e) {
       console.error('Error sending general notice:', e);
     }
-  });
+  }
+);
 
 // Notify bus users when bus notice is posted
-exports.onBusNotice = functions.firestore
-  .document('notices/buses/{busId}/{postId}')
-  .onCreate(async (snap, context) => {
-    const data = snap.data();
-    const busId = context.params.busId;
+exports.onBusNotice = onDocumentCreated(
+  'notices/buses/{busId}/{postId}',
+  async (event) => {
+    const data = event.data.data();
+    const busId = event.params.busId;
     const message = {
       notification: {
         title: `🚌 ${data.title}`,
@@ -36,9 +38,10 @@ exports.onBusNotice = functions.firestore
       topic: `bus_${busId}`,
     };
     try {
-      await admin.messaging().send(message);
+      await getMessaging().send(message);
       console.log(`Bus notice sent for ${busId}:`, data.title);
     } catch (e) {
       console.error('Error sending bus notice:', e);
     }
-  });
+  }
+);

@@ -63,19 +63,19 @@ class AuthService {
       await ref.set({
         'email': user.email,
         'displayName': user.displayName ?? '',
-        'role': 'user',
+        'role': 'normal', // Default to normal user
         'busId': null,
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
   }
 
-  static Future<Map<String, dynamic>> getUserRole() async {
+  static Future<Map<String, dynamic>> getUserDoc() async {
     final user = currentUser;
     if (user == null) return {'role': 'none'};
     final doc = await _db.collection('users').doc(user.uid).get();
-    if (!doc.exists) return {'role': 'user'};
-    return doc.data() ?? {'role': 'user'};
+    if (!doc.exists) return {'role': 'normal'};
+    return doc.data() ?? {'role': 'normal'};
   }
 
   static Future<void> signOut() async {

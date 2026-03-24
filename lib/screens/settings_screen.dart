@@ -40,7 +40,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final data = doc.data();
         setState(() {
           _favorites = List<String>.from(data?['favorites'] ?? []);
-          _displayName = data?['displayName'] ?? _user?.email?.split('@').first ?? 'User';
+          _displayName = data?['displayName'] ?? _user.email?.split('@').first ?? 'User';
           _notifsEnabled = data?['notifsEnabled'] ?? true;
           _loadingFavs = false;
           _userRole = {'role': data?['role'] ?? 'user'};
@@ -102,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 24),
             _buildSectionHeader('App Settings'),
             _buildSettingsList(isDark),
-            const SizedBox(height: 48),
+            const SizedBox(height: 24),
             _buildSignOutButton(),
             const SizedBox(height: 24),
             if (_userRole['role'] == 'admin') ...[
@@ -125,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 40),
             Center(
               child: Text(
-                'Version 1.4.0 · Lal Bus Team © 2026',
+                'Version 1.5.0-beta · Lal Bus Team © 2026',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade400, fontSize: 10),
               ),
@@ -403,17 +403,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _settingsTile(IconData icon, String title, String subtitle, bool isDark, {bool isLast = false}) {
-    return ListTile(
-      leading: Icon(icon, color: Colors.grey.shade600),
-      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-      subtitle: Text(subtitle, style: TextStyle(color: Colors.grey.shade500, fontSize: 12)),
-      trailing: const Icon(Icons.chevron_right, size: 20, color: Colors.grey),
-      onTap: () {},
-      shape: isLast ? null : Border(bottom: BorderSide(color: isDark ? Colors.grey.shade800 : Colors.grey.shade100)),
     );
   }
 

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../models/bus_data.dart';
-import '../services/auth_service.dart';
+import '../models/bus_route.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -14,9 +15,9 @@ class _AdminScreenState extends State<AdminScreen> {
   List<Map<String, dynamic>> _users = [];
   List<Map<String, dynamic>> _filtered = [];
   bool _loading = true;
-  String _search = '';
   bool _showAllAdmins = false;
   bool _showAllBusAdmins = false;
+  bool _showAllDrivers = false;
   bool _showAllUsers = false;
 
   @override
@@ -42,7 +43,6 @@ class _AdminScreenState extends State<AdminScreen> {
 
   void _applySearch(String q) {
     setState(() {
-      _search = q;
       _filtered = _users.where((u) {
         final email = (u['email'] ?? '').toLowerCase();
         final name = (u['displayName'] ?? '').toLowerCase();
@@ -55,8 +55,10 @@ class _AdminScreenState extends State<AdminScreen> {
       _filtered.where((u) => u['role'] == 'admin').toList();
   List<Map<String, dynamic>> get _busAdmins =>
       _filtered.where((u) => u['role'] == 'bus_admin').toList();
+  List<Map<String, dynamic>> get _drivers =>
+      _filtered.where((u) => u['role'] == 'driver').toList();
   List<Map<String, dynamic>> get _normalUsers =>
-      _filtered.where((u) => u['role'] == 'user' || u['role'] == null).toList();
+      _filtered.where((u) => u['role'] == 'user' || u['role'] == 'normal' || u['role'] == null).toList();
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +70,11 @@ class _AdminScreenState extends State<AdminScreen> {
         foregroundColor: Colors.white,
         title: const Text('Admin Panel', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'App Update Settings',
+            onPressed: _showUpdateSettingsDialog,
+          ),
           IconButton(icon: const Icon(Icons.refresh), onPressed: _loadUsers),
           IconButton(
             icon: const Icon(Icons.logout),
@@ -96,6 +103,7 @@ class _AdminScreenState extends State<AdminScreen> {
                       _statCard('Total', _users.length, Icons.people, Colors.blue),
                       _statCard('Admins', _admins.length, Icons.shield, const Color(0xFFCC0000)),
                       _statCard('Bus Admin', _busAdmins.length, Icons.directions_bus, Colors.orange),
+                      _statCard('Drivers', _drivers.length, Icons.drive_eta, Colors.indigo),
                       _statCard('Users', _normalUsers.length, Icons.person, Colors.green),
                     ],
                   ),
@@ -134,8 +142,13 @@ class _AdminScreenState extends State<AdminScreen> {
                           ..._busAdmins.take(_showAllBusAdmins ? _busAdmins.length : 3).map((u) => _UserCard(user: u, onEdit: () => _showEditDialog(u), onDelete: () => _deleteUser(u))),
                           if (_busAdmins.length > 3) _seeMoreBtn(_showAllBusAdmins, () => setState(() => _showAllBusAdmins = !_showAllBusAdmins), _busAdmins.length),
                         ],
+                        if (_drivers.isNotEmpty) ...[
+                          _sectionHeader('Drivers', _drivers.length, Icons.drive_eta, Colors.indigo),
+                          ..._drivers.take(_showAllDrivers ? _drivers.length : 3).map((u) => _UserCard(user: u, onEdit: () => _showEditDialog(u), onDelete: () => _deleteUser(u))),
+                          if (_drivers.length > 3) _seeMoreBtn(_showAllDrivers, () => setState(() => _showAllDrivers = !_showAllDrivers), _drivers.length),
+                        ],
                         if (_normalUsers.isNotEmpty) ...[
-                          _sectionHeader('Users', _normalUsers.length, Icons.person, Colors.green),
+                          _sectionHeader('Normal Users', _normalUsers.length, Icons.person, Colors.green),
                           ..._normalUsers.take(_showAllUsers ? _normalUsers.length : 3).map((u) => _UserCard(user: u, onEdit: () => _showEditDialog(u), onDelete: () => _deleteUser(u))),
                           if (_normalUsers.length > 3) _seeMoreBtn(_showAllUsers, () => setState(() => _showAllUsers = !_showAllUsers), _normalUsers.length),
                         ],
@@ -222,9 +235,11 @@ class _AdminScreenState extends State<AdminScreen> {
     String role = user['role'] ?? 'user';
     String? busId = user['busId'];
     final passCtrl = TextEditingController();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => StatefulBuilder(
         builder: (context, setSheet) => Padding(
@@ -243,7 +258,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 decoration: InputDecoration(
                   hintText: 'New password (leave blank to keep)',
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -252,8 +267,8 @@ class _AdminScreenState extends State<AdminScreen> {
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: ['user', 'bus_admin', 'admin'].map((r) {
-                  final selected = role == r;
+                children: ['normal', 'driver', 'bus_admin', 'admin'].map((r) {
+                  final selected = role == r || (r == 'normal' && role == 'user');
                   return GestureDetector(
                     onTap: () => setSheet(() => role = r),
                     child: Container(
@@ -269,19 +284,68 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               if (role == 'bus_admin') ...[
                 const SizedBox(height: 16),
-                const Text('Bus', style: TextStyle(fontWeight: FontWeight.w600)),
+                const Text('Bus (Route Admin)', style: TextStyle(fontWeight: FontWeight.w600)),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   value: busId,
-                  hint: const Text('Select bus'),
+                  hint: const Text('Select route'),
                   decoration: InputDecoration(
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
+                    fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   ),
                   items: duBusRoutes.map((r) => DropdownMenuItem(value: r.id, child: Text(r.nameEn))).toList(),
                   onChanged: (v) => setSheet(() => busId = v),
                 ),
+              ] else if (role == 'driver') ...[
+                const SizedBox(height: 16),
+                const Text('Bus (Vehicle Assignment)', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  value: duBusRoutes.any((r) => r.schedule.any((t) => t.busNo == busId)) 
+                      ? duBusRoutes.firstWhere((r) => r.schedule.any((t) => t.busNo == busId)).id 
+                      : null,
+                  hint: const Text('Select route'),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                  ),
+                  items: duBusRoutes.map((r) => DropdownMenuItem(value: r.id, child: Text(r.nameEn))).toList(),
+                  onChanged: (v) => setSheet(() {
+                    if (v == null) return;
+                    final route = duBusRoutes.firstWhere((r) => r.id == v);
+                    final firstBusId = route.schedule.firstWhere((t) => t.busNo.isNotEmpty, orElse: () => const BusTrip(time: '', busNo: '', type: '')).busNo;
+                    busId = firstBusId.isNotEmpty ? firstBusId : null;
+                  }),
+                ),
+                if (busId != null || duBusRoutes.any((r) => r.schedule.any((t) => t.busNo == busId))) ...[
+                  const SizedBox(height: 12),
+                  Builder(builder: (context) {
+                    final matchingRoute = duBusRoutes.firstWhere((r) => r.schedule.any((t) => t.busNo == busId), orElse: () => duBusRoutes.first);
+                    final uniqueBuses = matchingRoute.schedule
+                        .where((t) => t.busNo.isNotEmpty)
+                        .map((t) => t.busNo)
+                        .toSet()
+                        .toList();
+                    
+                    if (uniqueBuses.isEmpty) return const Text('No bus numbers found', style: TextStyle(color: Colors.red, fontSize: 12));
+                    
+                    final currentBusNo = uniqueBuses.contains(busId) ? busId : uniqueBuses.first;
+
+                    return DropdownButtonFormField<String>(
+                      value: currentBusNo,
+                      hint: const Text('Select Bus ID (e.g. 6213)'),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                      ),
+                      items: uniqueBuses.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                      onChanged: (v) => setSheet(() => busId = v),
+                    );
+                  }),
+                ],
               ],
               const SizedBox(height: 16),
               SizedBox(
@@ -293,9 +357,10 @@ class _AdminScreenState extends State<AdminScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: () async {
+                    final busIdToSave = (role == 'bus_admin' || role == 'driver') ? busId : null;
                     await FirebaseFirestore.instance.collection('users').doc(user['uid']).update({
                       'role': role,
-                      'busId': role == 'bus_admin' ? busId : null,
+                      'busId': busIdToSave,
                     });
                     if (passCtrl.text.isNotEmpty) {
                       try {
@@ -327,12 +392,14 @@ class _AdminScreenState extends State<AdminScreen> {
     final emailCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final nameCtrl = TextEditingController();
-    String role = 'user';
+    String role = 'normal';
     String? busId;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
       builder: (_) => StatefulBuilder(
         builder: (context, setSheet) => Padding(
@@ -348,7 +415,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 decoration: InputDecoration(
                   hintText: 'Display name',
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -359,7 +426,7 @@ class _AdminScreenState extends State<AdminScreen> {
                 decoration: InputDecoration(
                   hintText: 'Email',
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -370,27 +437,16 @@ class _AdminScreenState extends State<AdminScreen> {
                 decoration: InputDecoration(
                   hintText: 'Password',
                   filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
+                  fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: passCtrl,
-                obscureText: true,
-                decoration: InputDecoration(
-                  hintText: 'New password (leave blank to keep)',
-                  filled: true,
-                  fillColor: const Color(0xFFF5F5F5),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                ),
-              ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 10),
               const Text('Role', style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
-                children: ['user', 'bus_admin', 'admin'].map((r) {
+                children: ['normal', 'driver', 'bus_admin', 'admin'].map((r) {
                   final selected = role == r;
                   return GestureDetector(
                     onTap: () => setSheet(() => role = r),
@@ -409,15 +465,63 @@ class _AdminScreenState extends State<AdminScreen> {
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: busId,
-                  hint: const Text('Select bus'),
+                  hint: const Text('Select route'),
                   decoration: InputDecoration(
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     filled: true,
-                    fillColor: const Color(0xFFF5F5F5),
+                    fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
                   ),
                   items: duBusRoutes.map((r) => DropdownMenuItem(value: r.id, child: Text(r.nameEn))).toList(),
                   onChanged: (v) => setSheet(() => busId = v),
                 ),
+              ] else if (role == 'driver') ...[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: duBusRoutes.any((r) => r.id == (busId?.split('_').first)) ? busId?.split('_').first : null,
+                  hint: const Text('Select route'),
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                  ),
+                  items: duBusRoutes.map((r) => DropdownMenuItem(value: r.id, child: Text(r.nameEn))).toList(),
+                  onChanged: (v) => setSheet(() {
+                    if (v == null) return;
+                    // Reset if route changed, but we need to track local state for current route
+                    final route = duBusRoutes.firstWhere((r) => r.id == v);
+                    final firstBusId = route.schedule.firstWhere((t) => t.busNo.isNotEmpty, orElse: () => const BusTrip(time: '', busNo: '', type: '')).busNo;
+                    busId = firstBusId.isNotEmpty ? firstBusId : null;
+                  }),
+                ),
+                if (busId != null || duBusRoutes.any((r) => r.id == (busId?.split('_').first))) ...[
+                  const SizedBox(height: 12),
+                  Builder(builder: (context) {
+                    final routeId = busId?.contains('_') == true ? busId?.split('_').first : (duBusRoutes.firstWhere((r) => r.schedule.any((t) => t.busNo == busId), orElse: () => duBusRoutes.first).id);
+                    final route = duBusRoutes.firstWhere((r) => r.id == routeId, orElse: () => duBusRoutes.first);
+                    final uniqueBuses = route.schedule
+                        .where((t) => t.busNo.isNotEmpty)
+                        .map((t) => t.busNo)
+                        .toSet()
+                        .toList();
+                    
+                    if (uniqueBuses.isEmpty) return const Text('No bus numbers found in this route schedule', style: TextStyle(color: Colors.red, fontSize: 12));
+                    
+                    // If current busId is not in uniqueBuses, it might be from another route or old data
+                    final currentBusNo = uniqueBuses.contains(busId) ? busId : uniqueBuses.first;
+
+                    return DropdownButtonFormField<String>(
+                      value: currentBusNo,
+                      hint: const Text('Select Bus ID (e.g. 6213)'),
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                      ),
+                      items: uniqueBuses.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                      onChanged: (v) => setSheet(() => busId = v),
+                    );
+                  }),
+                ],
               ],
               const SizedBox(height: 16),
               SizedBox(
@@ -432,7 +536,6 @@ class _AdminScreenState extends State<AdminScreen> {
                     if (emailCtrl.text.isEmpty || passCtrl.text.isEmpty) return;
                     try {
                       String uid;
-                      final adminUser = FirebaseAuth.instance.currentUser!;
                       try {
                         final cred = await FirebaseAuth.instance.createUserWithEmailAndPassword(
                           email: emailCtrl.text.trim(),
@@ -464,7 +567,7 @@ class _AdminScreenState extends State<AdminScreen> {
                         'email': emailCtrl.text.trim(),
                         'displayName': nameCtrl.text.trim(),
                         'role': role,
-                        'busId': role == 'bus_admin' ? busId : null,
+                        'busId': (role == 'bus_admin' || role == 'driver') ? busId : null,
                         'createdAt': FieldValue.serverTimestamp(),
                       });
                       if (context.mounted) Navigator.pop(context);
@@ -487,6 +590,125 @@ class _AdminScreenState extends State<AdminScreen> {
       ),
     );
   }
+
+  void _showUpdateSettingsDialog() async {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    TextEditingController? nameCtrl;
+    TextEditingController? urlCtrl;
+    bool? localIsMandatory;
+    final packageInfo = await PackageInfo.fromPlatform();
+    final currentAppVersion = "${packageInfo.version} (${packageInfo.buildNumber})";
+
+    if (!mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => StatefulBuilder(
+        builder: (context, setSheet) {
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance.collection('settings').doc('app_update').get(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting && nameCtrl == null) {
+                return const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator(color: Color(0xFFCC0000))),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return SizedBox(
+                  height: 200,
+                  child: Center(child: Text('Error: ${snapshot.error}')),
+                );
+              }
+
+              if (nameCtrl == null) {
+                final data = (snapshot.data?.data() as Map?) ?? {};
+                nameCtrl = TextEditingController(text: data['latest_version_name'] ?? '');
+                urlCtrl = TextEditingController(text: data['update_url'] ?? '');
+                localIsMandatory = data['is_mandatory'] ?? false;
+              }
+
+              return Padding(
+                padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 20, left: 16, right: 16, top: 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('App Update Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 8),
+                    Text('Installed App Version: $currentAppVersion',
+                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: nameCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Latest Version Name (e.g. 1.5.0)',
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: urlCtrl,
+                      decoration: InputDecoration(
+                        labelText: 'Update APK URL',
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      title: const Text('Mandatory Update'),
+                      subtitle: const Text('Users cannot skip this update'),
+                      value: localIsMandatory!,
+                      onChanged: (v) => setSheet(() => localIsMandatory = v),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFCC0000),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          var finalUrl = urlCtrl!.text.trim();
+                          if (finalUrl.isNotEmpty && !finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
+                            finalUrl = 'https://' + finalUrl;
+                          }
+                          await FirebaseFirestore.instance.collection('settings').doc('app_update').set({
+                            'latest_version_name': nameCtrl!.text.trim(),
+                            'update_url': finalUrl,
+                            'is_mandatory': localIsMandatory,
+                            'updated_at': FieldValue.serverTimestamp(),
+                          }, SetOptions(merge: true));
+                          if (context.mounted) Navigator.pop(context);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Update settings saved.')),
+                            );
+                          }
+                        },
+                        child: const Text('Save Settings'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
 }
 
 class _UserCard extends StatelessWidget {
@@ -500,6 +722,7 @@ class _UserCard extends StatelessWidget {
     switch (role) {
       case 'admin': return const Color(0xFFCC0000);
       case 'bus_admin': return Colors.orange;
+      case 'driver': return Colors.indigo;
       default: return Colors.green;
     }
   }
@@ -508,6 +731,9 @@ class _UserCard extends StatelessWidget {
     switch (role) {
       case 'admin': return 'Admin';
       case 'bus_admin': return 'Bus Admin';
+      case 'driver': return 'Driver';
+      case 'normal':
+      case 'user': return 'Normal';
       default: return 'User';
     }
   }
