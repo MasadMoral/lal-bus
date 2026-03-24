@@ -396,62 +396,62 @@ class _HomeScreenState extends State<HomeScreen>
       child: Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
-        backgroundColor: const Color(0xFFCC0000),
-        title: const Text(
-          'Lal Bus',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          if (_userRole == 'driver')
-            IconButton(
-              icon: const Icon(Icons.logout, color: Colors.white),
-              tooltip: 'Logout',
-              onPressed: () => _showLogoutDialog(context),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.person_outline, color: Colors.white),
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          backgroundColor: const Color(0xFFCC0000),
+          title: const Text(
+            'Lal Bus',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+          actions: [
+            if (_userRole == 'driver')
+              IconButton(
+                icon: const Icon(Icons.logout, color: Colors.white),
+                tooltip: 'Logout',
+                onPressed: () => _showLogoutDialog(context),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.person_outline, color: Colors.white),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                ),
               ),
-            ),
-        ],
-      ),
-      body: SafeArea(
-        child: RefreshIndicator(
-          color: const Color(0xFFCC0000),
-          onRefresh: () async {
-            _listenToActivity();
-            await Future.delayed(const Duration(seconds: 1));
-          },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(isDark),
-                const SizedBox(height: 16),
-                _buildBusCard(isDark, cardColor),
-                const SizedBox(height: 16),
-                if (_error != null) ...[
-                  _buildErrorBanner(),
+          ],
+        ),
+        body: SafeArea(
+          child: RefreshIndicator(
+            color: const Color(0xFFCC0000),
+            onRefresh: () async {
+              _listenToActivity();
+              await Future.delayed(const Duration(seconds: 1));
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildHeader(isDark),
                   const SizedBox(height: 16),
-                ],
-                if (_userRole != 'driver') ...[
-                  _buildGrid(isDark, cardColor),
+                  _buildBusCard(isDark, cardColor),
                   const SizedBox(height: 16),
-                  _buildRecentActivity(isDark, cardColor),
+                  if (_error != null) ...[
+                    _buildErrorBanner(),
+                    const SizedBox(height: 16),
+                  ],
+                  if (_userRole != 'driver') ...[
+                    _buildGrid(isDark, cardColor),
+                    const SizedBox(height: 16),
+                    _buildRecentActivity(isDark, cardColor),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildHeader(bool isDark) {
     return Container(
@@ -549,132 +549,141 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildBusCard(bool isDark, Color cardColor) {
-    if (!_isOnBus) {
-      return Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: cardColor,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+    final selectedName = _selectedBusId != null
+        ? duBusRoutes
+            .firstWhere(
+              (r) => r.id == _selectedBusId,
+              orElse: () => duBusRoutes.first,
+            )
+            .nameEn
+        : null;
+
+    return Column(
+      children: [
+        // 1. Navigation Card (Track Live Buses) - Always show if not on a bus
+        if (!_isOnBus) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+              ),
+            ),
+            child: InkWell(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MapScreen()),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFCC0000).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.map, color: Color(0xFFCC0000)),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Track Live Buses',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        Text(
+                          'See where your bus is right now',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: Colors.grey),
+                ],
+              ),
+            ),
           ),
-        ),
-        child: InkWell(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const MapScreen()),
+          const SizedBox(height: 16),
+        ],
+
+        // 2. Sharing Card (I'm on a bus)
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isOnBus
+                ? (isDark ? const Color(0xFF2D1B1B) : const Color(0xFFFFF1F1))
+                : cardColor,
+            border: Border.all(
+              color: _isOnBus
+                  ? const Color(0xFFF09595)
+                  : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
+            ),
+            borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFCC0000).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.map, color: Color(0xFFCC0000)),
-              ),
-              const SizedBox(width: 16),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Track Live Buses',
+                      _isOnBus ? 'On $selectedName' : 'Not on a bus',
                       style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
+                        color: _isOnBus
+                            ? const Color(0xFFA32D2D)
+                            : (isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade600),
+                        fontSize: 12,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Text(
-                      'See where your bus is right now',
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                      _isOnBus
+                          ? 'Sharing your location'
+                          : 'Verify bus location',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : const Color(0xFF501313),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isOnBus
+                      ? Colors.grey.shade700
+                      : const Color(0xFFCC0000),
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                onPressed: () async {
+                  if (_isOnBus) {
+                    await LocationService.stopSharing();
+                    setState(() => _isOnBus = false);
+                  } else {
+                    _showBusSelectionDialog();
+                  }
+                },
+                child: Text(_isOnBus ? 'Exit bus' : "I'm on a bus"),
+              ),
             ],
           ),
         ),
-      );
-    }
-
-    final selectedName = _selectedBusId != null
-        ? duBusRoutes
-              .firstWhere(
-                (r) => r.id == _selectedBusId,
-                orElse: () => duBusRoutes.first,
-              )
-              .nameEn
-        : null;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: _isOnBus
-            ? (isDark ? const Color(0xFF2D1B1B) : const Color(0xFFFFF1F1))
-            : cardColor,
-        border: Border.all(
-          color: _isOnBus
-              ? const Color(0xFFF09595)
-              : (isDark ? Colors.grey.shade800 : Colors.grey.shade200),
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _isOnBus ? 'On $selectedName' : 'Not on a bus',
-                  style: TextStyle(
-                    color: _isOnBus
-                        ? const Color(0xFFA32D2D)
-                        : (isDark
-                              ? Colors.grey.shade300
-                              : Colors.grey.shade600),
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  _isOnBus ? 'Sharing your location' : 'Verify bus location',
-                  style: TextStyle(
-                    color: isDark ? Colors.white : const Color(0xFF501313),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _isOnBus
-                  ? Colors.grey.shade700
-                  : const Color(0xFFCC0000),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            onPressed: () async {
-              if (_isOnBus) {
-                await LocationService.stopSharing();
-                setState(() => _isOnBus = false);
-              } else {
-                _showBusSelectionDialog();
-              }
-            },
-            child: Text(_isOnBus ? 'Exit bus' : "I'm on a bus"),
-          ),
-        ],
-      ),
+      ],
     );
   }
 
