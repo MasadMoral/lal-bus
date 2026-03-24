@@ -560,60 +560,35 @@ class _HomeScreenState extends State<HomeScreen>
 
     return Column(
       children: [
-        // 1. Navigation Card (Track Live Buses) - Always show if not on a bus
-        if (!_isOnBus) ...[
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-              ),
-            ),
-            child: InkWell(
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MapScreen()),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFCC0000).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Icon(Icons.map, color: Color(0xFFCC0000)),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Track Live Buses',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        Text(
-                          'See where your bus is right now',
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.chevron_right, color: Colors.grey),
-                ],
-              ),
-            ),
+        // 1. Live Map Card - Permanent
+        _buildUtilityCard(
+          isDark: isDark,
+          cardColor: cardColor,
+          icon: Icons.map,
+          title: 'Track Live Buses',
+          subtitle: 'See where your bus is right now',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const MapScreen()),
           ),
-          const SizedBox(height: 16),
-        ],
+        ),
+        const SizedBox(height: 12),
 
-        // 2. Sharing Card (I'm on a bus)
+        // 2. Schedule Card - Permanent
+        _buildUtilityCard(
+          isDark: isDark,
+          cardColor: cardColor,
+          icon: Icons.calendar_today,
+          title: 'Bus Schedule',
+          subtitle: 'Check departure & arrival times',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ScheduleScreen()),
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // 3. Sharing Card (I'm on a bus)
         AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           padding: const EdgeInsets.all(16),
@@ -650,7 +625,7 @@ class _HomeScreenState extends State<HomeScreen>
                     Text(
                       _isOnBus
                           ? 'Sharing your location'
-                          : 'Verify bus location',
+                          : 'Update bus location',
                       style: TextStyle(
                         color: isDark ? Colors.white : const Color(0xFF501313),
                         fontSize: 15,
@@ -684,6 +659,64 @@ class _HomeScreenState extends State<HomeScreen>
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildUtilityCard({
+    required bool isDark,
+    required Color cardColor,
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFCC0000).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: const Color(0xFFCC0000)),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
+                    ),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
