@@ -22,8 +22,13 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen>
     with SingleTickerProviderStateMixin {
   final MapController _mapController = MapController();
-  StreamSubscription<DatabaseEvent>? _busSub;
+  final List<StreamSubscription<DatabaseEvent>> _busSubs = [];
   StreamSubscription<Position>? _locationSub;
+
+  // Throttle: max 1 setState per 3s to avoid rebuilding map on every GPS tick
+  Timer? _throttleTimer;
+  final Map<String, Map<String, dynamic>> _pendingBuses = {};
+  bool _firstBusLoad = true;
 
   Map<String, Map<String, dynamic>> _activeBuses = {};
   LatLng? _userLocation;
@@ -75,7 +80,8 @@ class _MapScreenState extends State<MapScreen>
 
   @override
   void dispose() {
-    _busSub?.cancel();
+    for (final s in _busSubs) { s.cancel(); }
+    _throttleTimer?.cancel();
     _locationSub?.cancel();
     _searchController.dispose();
     super.dispose();
@@ -148,67 +154,99 @@ class _MapScreenState extends State<MapScreen>
     return r * 2 * atan2(sqrt(a), sqrt(1 - a));
   }
 
+  // Process raw bus data from RTDB into the shape the UI needs.
+  // Returns null if the bus has no valid (non-stale) users.
+  Map<String, dynamic>? _processBusSnapshot(dynamic rawValue) {
+    if (rawValue is! Map) return null;
+    final users = rawValue['users'] as Map?;
+    if (users == null || users.isEmpty) return null;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final List<Map<String, dynamic>> validUsers = [];
+    int latestTs = 0;
+
+    users.forEach((uid, userData) {
+      if (userData is Map) {
+        final lat = (userData['lat'] as num?)?.toDouble();
+        final lng = (userData['lng'] as num?)?.toDouble();
+        final ts = userData['timestamp'] as int? ?? 0;
+        if (lat != null && lng != null && now - ts < 15 * 60 * 1000) {
+          validUsers.add({'lat': lat, 'lng': lng, 'ts': ts});
+          if (ts > latestTs) latestTs = ts;
+        }
+      }
+    });
+
+    if (validUsers.isEmpty) return null;
+
+    final position = _aggregateLocations(validUsers);
+    final metadata = rawValue['metadata'] as Map?;
+    return {
+      'lat': position.latitude,
+      'lng': position.longitude,
+      'userCount': validUsers.length,
+      'timestamp': latestTs,
+      'tripTime': metadata?['tripTime'],
+    };
+  }
+
+  // Schedule a throttled setState — fires immediately the first time,
+  // then at most once every 3 s on subsequent RTDB pushes.
+  void _scheduleUpdate() {
+    if (_firstBusLoad) {
+      _firstBusLoad = false;
+      if (!mounted) return;
+      setState(() {
+        _activeBuses = Map.from(_pendingBuses);
+        _loading = false;
+        _error = null;
+      });
+      return;
+    }
+    if (_throttleTimer?.isActive ?? false) return;
+    _throttleTimer = Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      setState(() {
+        _activeBuses = Map.from(_pendingBuses);
+        _loading = false;
+        _error = null;
+      });
+    });
+  }
+
   void _listenToBuses() {
-    _busSub = FirebaseDatabase.instanceFor(
+    for (final s in _busSubs) { s.cancel(); }
+    _busSubs.clear();
+    _pendingBuses.clear();
+    _firstBusLoad = true;
+
+    final ref = FirebaseDatabase.instanceFor(
       app: Firebase.app(),
       databaseURL: 'https://rtx-lalbus-0916-default-rtdb.asia-southeast1.firebasedatabase.app',
-    ).ref('buses').onValue.listen(
-      (event) {
-        if (!mounted) return;
-        final data = event.snapshot.value as Map<dynamic, dynamic>?;
-        final now = DateTime.now().millisecondsSinceEpoch;
-        final Map<String, Map<String, dynamic>> buses = {};
+    ).ref('buses');
 
-        if (data != null) {
-          data.forEach((busId, busData) {
-            if (busData is! Map) return;
-            final users = busData['users'] as Map?;
-            if (users == null || users.isEmpty) return;
+    void handleBus(String busId, dynamic value) {
+      final processed = _processBusSnapshot(value);
+      if (processed == null) {
+        _pendingBuses.remove(busId);
+      } else {
+        _pendingBuses[busId] = processed;
+      }
+      _scheduleUpdate();
+    }
 
-            final List<Map<String, dynamic>> validUsers = [];
-            int latestTs = 0;
-
-            users.forEach((uid, userData) {
-              if (userData is Map) {
-                final lat = (userData['lat'] as num?)?.toDouble();
-                final lng = (userData['lng'] as num?)?.toDouble();
-                final ts = userData['timestamp'] as int? ?? 0;
-                final diff = now - ts;
-                if (lat != null && lng != null && diff < 15 * 60 * 1000) {
-                  validUsers.add({'lat': lat, 'lng': lng, 'ts': ts});
-                  if (ts > latestTs) latestTs = ts;
-                }
-              }
-            });
-
-            if (validUsers.isNotEmpty) {
-              final position = _aggregateLocations(validUsers);
-              final metadata = busData['metadata'] as Map?;
-              buses[busId.toString()] = {
-                'lat': position.latitude,
-                'lng': position.longitude,
-                'userCount': validUsers.length,
-                'timestamp': latestTs,
-                'tripTime': metadata?['tripTime'],
-              };
-            }
-          });
-        }
-
-        setState(() {
-          _activeBuses = buses;
-          _loading = false;
-          _error = null;
-        });
-      },
-      onError: (e) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _error = 'Failed to load bus data';
-        });
-      },
-    );
+    _busSubs.addAll([
+      ref.onChildAdded.listen(
+        (e) { if (mounted) handleBus(e.snapshot.key!, e.snapshot.value); },
+        onError: (_) { if (mounted) setState(() { _loading = false; _error = 'Failed to load bus data'; }); },
+      ),
+      ref.onChildChanged.listen(
+        (e) { if (mounted) handleBus(e.snapshot.key!, e.snapshot.value); },
+      ),
+      ref.onChildRemoved.listen(
+        (e) { if (mounted) handleBus(e.snapshot.key!, null); },
+      ),
+    ]);
   }
 
   Future<void> _getUserLocation({bool centerOnUser = false}) async {
@@ -316,7 +354,8 @@ class _MapScreenState extends State<MapScreen>
             ),
             if (_selectedBusId != null) _buildRoutePolyline(),
             if (_showStops && _selectedBusId != null) _buildStopMarkers(),
-            MarkerLayer(markers: _buildBusMarkers()),
+            // RepaintBoundary: bus markers repaint independently from the map tile layer
+            RepaintBoundary(child: MarkerLayer(markers: _buildBusMarkers())),
             if (_userLocation != null)
               MarkerLayer(
                 markers: [
@@ -410,7 +449,6 @@ class _MapScreenState extends State<MapScreen>
                     _loading = true;
                     _error = null;
                   });
-                  _busSub?.cancel();
                   _listenToBuses();
                 },
               ),
