@@ -549,7 +549,7 @@ class _HomeScreenState extends State<HomeScreen>
   }
 
   Widget _buildBusCard(bool isDark, Color cardColor) {
-    if (!_canShareLocation && !_isOnBus) {
+    if (!_isOnBus) {
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
