@@ -12,7 +12,8 @@ android/.gradle/
 android/local.properties
 android/key.properties
 android/app/google-services.json
-# lib/firebase_options.dart is now censored and tracked
+# lib/firebase_options.dart is now censored on GitHub, ignoring local changes
+lib/firebase_options.dart
 lib/config/secrets.dart
 .firebase/
 functions/node_modules/
