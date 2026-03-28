@@ -1,0 +1,101 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/notification_service.dart';
+import 'firebase_options.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  
+  // Initialize Push Notifications
+  // await NotificationService.initialize();
+  
+  runApp(const LalBusApp());
+}
+
+class LalBusApp extends StatefulWidget {
+  const LalBusApp({super.key});
+
+  @override
+  State<LalBusApp> createState() => _LalBusAppState();
+}
+
+class _LalBusAppState extends State<LalBusApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Handle app lifecycle for location sharing
+    if (state == AppLifecycleState.paused) {
+      // Potentially stop updating freq or sync
+    } else if (state == AppLifecycleState.resumed) {
+      // Resume sync if needed
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Lal Bus',
+      debugShowCheckedModeBanner: false,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
+      themeMode: ThemeMode.system,
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator(color: Color(0xFFCC0000))));
+          }
+          if (snapshot.hasData) {
+            return const HomeScreen();
+          }
+          return const LoginScreen();
+        },
+      ),
+    );
+  }
+
+  ThemeData _buildTheme(Brightness brightness) {
+    final baseTheme = brightness == Brightness.light
+        ? ThemeData.light(useMaterial3: true)
+        : ThemeData.dark(useMaterial3: true);
+
+    return baseTheme.copyWith(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFFCC0000),
+        primary: const Color(0xFFCC0000),
+        brightness: brightness,
+      ),
+      textTheme: GoogleFonts.interTextTheme(baseTheme.textTheme),
+      appBarTheme: const AppBarTheme(
+        centerTitle: true,
+        elevation: 0,
+      ),
+      cardTheme: CardThemeData(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      ),
+    );
+  }
+}

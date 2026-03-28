@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "buses": {
+      ".read": "auth != null",
+      "$busId": {
+        "users": {
+          "$userId": {
+            ".read": "auth != null",
+            ".write": "auth != null && auth.uid == $userId"
+          }
+        }
+      }
+    }
+  }
+}
