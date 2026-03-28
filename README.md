@@ -50,6 +50,9 @@ To keep things safe, I've hidden the secret keys. You need to put your own in:
 2. **The Firebase Options File:**
    - Open `lib/firebase_options.dart`.
    - Look for the `android` section and fill in the values (API Key, App ID, etc.) that you got from the Firebase Console.
+3. **The Configuration Files:**
+   - Open `firebase.json` and `.firebaserc` in the main folder.
+   - Replace `YOUR_PROJECT_ID` and `YOUR_APP_ID` with your actual project details.
 
 ### 5. Start the App!
 1. Open a "Terminal" (like a command prompt) in your project folder.
