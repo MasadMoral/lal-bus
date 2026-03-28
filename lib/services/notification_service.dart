@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../main.dart';
 import '../screens/notices_screen.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'location_service.dart';
 import 'dart:convert';
 import '../config/secrets.dart';
@@ -23,15 +22,6 @@ class NotificationService {
     'Notices',
     description: 'Notifications for new notices',
     importance: Importance.high,
-  );
-
-  /// Android notification channel for persistent location sharing status.
-  static const AndroidNotificationChannel _sharingChannel = AndroidNotificationChannel(
-    'sharing_status_channel',
-    'Bus Status',
-    description: 'Persistent notification when sharing location on a bus',
-    importance: Importance.low, // Lower importance as it is ongoing and silent
-    showBadge: false,
   );
 
   static const int _ongoingId = 888;
